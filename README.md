@@ -1,1 +1,2 @@
-# Study
+# Server Sutdy Project
+Language: Cpp
