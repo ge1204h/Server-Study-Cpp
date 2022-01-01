@@ -3,25 +3,12 @@
 #include <atomic>
 #include <mutex>
 
-//DeadLock
-#include "AccountManager.h"
-#include "UserManager.h"
-
-void Func1()
-{
-	for (int32 i = 0; i < 100; i++)
-	{
-		UserManager::Instance()->ProcessSave();
-	}
-}
-
-void Func2()
-{
-	for (int32 i = 0; i < 100; i++)
-	{
-		AccountManager::Instance()->ProcessLogin();
-	}
-}
+//Lock 구현 이론
+/*
+* 1. 존버메타 - SpinLock
+* 2. 랜덤메타 - 
+* 3. 갑질메타 - 
+*/
 
 int main()
 {
