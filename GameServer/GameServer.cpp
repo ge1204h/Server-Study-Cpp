@@ -37,6 +37,12 @@ public:
 		while (_locked.compare_exchange_strong(expected, desired) == false)
 		{
 			expected = false;
+
+			// Sleep
+			// 대기중인 스레드를 커널로 돌려보냄
+			//this_thread::sleep_for(chrono::milliseconds(100));
+			//this_thread::sleep_for(100ms); // 몇초동안 재스케쥴링이 되지 않는다.
+			this_thread::yield(); // 현재는 쓰지않기때문에 반환을 해준다.
 		}
 	}
 
@@ -50,7 +56,7 @@ private:
 	// volatile
 	// cpp: 컴파일러한테 최적화를 하지 말아달라고함
 	// cshprp: 컴파일러 최적화 & 메모리 베리어 & 가시성
-	//volatile bool _locked = false;
+	// volatile bool _locked = false;
 	
 	atomic<bool> _locked = false;
 };
