@@ -2,6 +2,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <Windows.h>
 
 //Lock 구현 이론
 /*
@@ -10,95 +11,56 @@
 * 3. 갑질메타 - Event
 */
 
-// SpinLock
-class SpinLock
-{
-public:
-	void lock()
-	{
-		// CAS (Compare-And-Swap)
+// Auto Reset Event - 문이 자동으로 잠긴다.
+// Manual Reset Event - 문이 수동으로 잠긴다.
 
-		bool expected = false; // _locked 최초 값이길 기대하는 값
-		bool desired = true; // _locked 바뀌길 원하는 값
-
-		// CAS 의사 코드
-		//if (_locked == expected)
-		//{
-		//	expected = _locked;
-		//	_locked = desired;
-		//	return true;
-		//}
-		//else
-		//{
-		//	expected = _locked;
-		//	return false;
-		//}
-
-		while (_locked.compare_exchange_strong(expected, desired) == false)
-		{
-			expected = false;
-
-			// Sleep
-			// 대기중인 스레드를 커널로 돌려보냄
-			//this_thread::sleep_for(chrono::milliseconds(100));
-			//this_thread::sleep_for(100ms); // 몇초동안 재스케쥴링이 되지 않는다.
-			this_thread::yield(); // 현재는 쓰지않기때문에 반환을 해준다.
-		}
-	}
-
-	void unlock()
-	{
-		//_locked = false;
-		_locked.store(false);
-	}
-
-private:
-	// volatile
-	// cpp: 컴파일러한테 최적화를 하지 말아달라고함
-	// cshprp: 컴파일러 최적화 & 메모리 베리어 & 가시성
-	// volatile bool _locked = false;
-	
-	atomic<bool> _locked = false;
-};
-
-int32 sum = 0;
 mutex m;
+queue<int32> q;
+HANDLE handle;
 
-SpinLock spinLock;
-
-void Add()
+void Producer()
 {
-	for (int32 i = 0; i < 10'0000; i++)
+	while (true)
 	{
-		lock_guard<SpinLock> guard(spinLock);
-		sum++;
+		unique_lock<mutex> lock(m);
+		q.push(100);
+
+		::SetEvent(handle); // handle 커널 오브젝트를 시그널 상태로 바꿔주세요.
+		this_thread::sleep_for(10000ms);
 	}
 }
 
-void Sub()
+void Consumer()
 {
-	for (int32 i = 0; i < 10'0000; i++)
+	while (true)
 	{
-		lock_guard<SpinLock> guard(spinLock);
-		sum--;
+		::WaitForSingleObject(handle, INFINITE); // Non-Signal 상태라면 쿨쿨 재움, 해당 스레드 실행하지 않음
+		// ResetEvent(handle) : Signal 상태 실행 후 Non-Signal 상태로 변경 (Auto (자동))
+
+		unique_lock<mutex> lock(m);
+		if (q.empty() == false)
+		{
+			int32 data = q.front();
+			q.pop();
+			cout << data << endl;
+		}
 	}
 }
 
 int main()
 {
-	// volatile 유무에 따라서 어셈블리 처리가 달라진다.
-	//volatile int32 a = 0;
-	//a = 1;
-	//a = 2;
-	//a = 3;
-	//a = 4;
-	//cout << a << endl;
+	// 커널 오브젝트(커널에서 관리하는 오브젝트). - 다른 프로그램끼리도 쓸 수 있음
+	// HANDLE = 어떤 이벤트인지 구별하는 식별자
+	// Usage Count = 이 오브젝트를 몇명이 사용하고 있는지
+	// Signal (파란불) - 켜진상태 / Non-Signal (빨간불)-꺼진상태
+	// Auto (자동리셋) / Manual (수동리셋)
+	handle = ::CreateEvent(NULL/*보안속성*/, FALSE/*bManualReset*/, FALSE/*bInitialState*/, NULL /*Name*/); // 사용하면 cpu점유율이 0으로 내려감
 
-	thread t1(Add);
-	thread t2(Sub);
+	thread t1(Producer);
+	thread t2(Consumer);
 
 	t1.join();
 	t2.join();
 
-	cout << sum << endl;
+	::CloseHandle(handle);
 }
